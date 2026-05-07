@@ -133,7 +133,6 @@ func _ready():
 
 func _on_steam_ready():
     print("Logged in as: ", SteamApi.GetPersonaName())
-    print("App ID: ", SteamApi.GetAppId())
 
 # Achievements
 SteamApi.SetAchievement("ACH_WIN_ONE_GAME")
@@ -166,10 +165,17 @@ public partial class MyNode : Node
 
     private void OnSteamReady()
     {
-        GD.Print("Steam ready: " + UserData.Me.UserName);
+        GD.Print("Logged in as: " + UserData.Me.UserName);
         var myAch = AchievementData.Get("ACH_WIN_ONE_GAME");
         myAch.IsAchieved = true;
         myAch.Store();
+
+        var board = LeaderboardData.Get("Top Scores");
+        board.UploadSCore(12345, (result, error) =>
+        {
+            if(!error)
+                print("New rank: ", result.global_rank_new))
+        });
     }
 }
 ```
