@@ -161,15 +161,15 @@ public partial class MyNode : Node
 
     public override void _Ready()
     {
-        _api = Engine.GetSingleton("SteamApi");
-        _api.Connect("OnReady", Callable.From(OnSteamReady));
+        SteamTools.WhenReady(OnSteamReady);
     }
 
     private void OnSteamReady()
     {
-        GD.Print("Steam ready: " + _api.Call("GetPersonaName"));
-        _api.Call("SetAchievement", "ACH_WIN_ONE_GAME");
-        _api.Call("StoreStats");
+        GD.Print("Steam ready: " + UserData.Me.UserName);
+        var myAch = AchievementData.Get("ACH_WIN_ONE_GAME");
+        myAch.IsAchieved = true;
+        myAch.Store();
     }
 }
 ```
