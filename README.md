@@ -125,6 +125,8 @@ The `CMakeLists.txt` exposes two cache variables you can override:
 
 ## Usage
 
+> **Toolkit for Steamworks** — available to [GitHub Sponsors](https://github.com/sponsors/heathen-engineering) — extends Foundation's C# layer with a `SteamTools` singleton and strongly-typed wrappers covering the **full Steamworks SDK**: Lobbies, Inventory, Friends, Remote Play, Timeline, Game Server, and more. All Toolkit wrappers follow the same `UserData`, `StatData`, `AchievementData`, and `LeaderboardData` patterns found in Foundation.
+
 ### GDScript
 
 ```gdscript
@@ -142,45 +144,40 @@ SteamApi.StoreStats()
 SteamApi.UploadLeaderboardScore("Top Scores", 12345, func(result, error):
     if not error:
         print("New rank: ", result.global_rank_new))
-
-# Lobbies
-SteamApi.CreateLobby(LobbyType.Public, 4, func(result, error):
-    if not error:
-        print("Lobby ID: ", result.lobby_id))
 ```
 
 ### C#
 
 ```csharp
 using Godot;
+using Heathen.SteamworksIntegration;
 
 public partial class MyNode : Node
 {
-    private GodotObject _api;
-
     public override void _Ready()
     {
-        SteamTools.WhenReady(OnSteamReady);
+        SteamToolsInterface.WhenReady(OnSteamReady);
     }
 
     private void OnSteamReady()
     {
         GD.Print("Logged in as: " + UserData.Me.UserName);
-        var myAch = AchievementData.Get("ACH_WIN_ONE_GAME");
-        myAch.IsAchieved = true;
-        myAch.Store();
 
+        // Achievements
+        var ach = AchievementData.Get("ACH_WIN_ONE_GAME");
+        ach.IsAchieved = true;
+        ach.Store();
+
+        // Leaderboards (resolved at startup via LeaderboardIds property)
         var board = LeaderboardData.Get("Top Scores");
-        board.UploadSCore(12345, (result, error) =>
+        board.UploadScore(12345, (entry, error) =>
         {
-            if(!error)
-                print("New rank: ", result.global_rank_new))
+            if (!error)
+                GD.Print("New rank: " + entry.Rank);
         });
     }
 }
 ```
-
-> **Toolkit for Steamworks** (available to [GitHub Sponsors](https://github.com/sponsors/heathen-engineering)) adds a full strongly-typed C# wrapper layer built on top of Foundation.
 
 -----
 
