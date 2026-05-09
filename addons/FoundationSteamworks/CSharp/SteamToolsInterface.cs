@@ -38,6 +38,13 @@ namespace Heathen.SteamworksIntegration
         private static void HandleReady()
         {
             SteamToolsEvents.OnReady -= HandleReady;
+
+            var idsVariant = _singleton.Get("leaderboardIds");
+            if (idsVariant.VariantType == Variant.Type.PackedStringArray)
+                foreach (string name in idsVariant.As<string[]>())
+                    if (!string.IsNullOrEmpty(name))
+                        LeaderboardData.CacheFromName(name);
+
             foreach (var cb in _whenReadyCallbacks)
                 cb?.Invoke();
             _whenReadyCallbacks.Clear();

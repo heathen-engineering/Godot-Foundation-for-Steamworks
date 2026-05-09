@@ -31,5 +31,11 @@ namespace Heathen.SteamworksIntegration.API
 
         public static bool IsTopRankLowestScore(string leaderboard) =>
             SteamTools.IsLeaderboardTopRankLowestScore(leaderboard);
+
+        public static void UploadScore(string leaderboard, int score, Action<LeaderboardEntryData, bool> callback) =>
+            SteamTools.UploadLeaderboardScore(leaderboard, score, callback);
+
+        public static void UploadScoreWithDetails(string leaderboard, int score, int[] details, Action<LeaderboardEntryData, bool> callback) =>
+            SteamTools.UploadLeaderboardScoreWithDetails(leaderboard, score, details, callback);
     }
 }

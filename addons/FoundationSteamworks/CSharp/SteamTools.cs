@@ -28,6 +28,8 @@ namespace Heathen.SteamworksIntegration
 
         public static bool IsReady => (bool)Instance.Call("GetIsReady");
 
+        public static int AppId => (int)Instance.Get("appId");
+
         // --- App ---
 
         public static int AppBuildId => (int)Instance.Call("GetAppBuildId");
@@ -156,6 +158,26 @@ namespace Heathen.SteamworksIntegration
         public static string GetLeaderboardName(string leaderboard) => (string)Instance.Call("GetLeaderboardName", leaderboard);
 
         public static bool IsLeaderboardTopRankLowestScore(string leaderboard) => (bool)Instance.Call("IsLeaderboardTopRankLowestScore", leaderboard);
+
+        public static void UploadLeaderboardScore(string leaderboard, int score, Action<LeaderboardEntryData, bool> callback)
+        {
+            Callable callable = Callable.From((Variant entryVar, bool ioError) =>
+            {
+                LeaderboardEntryData entry = entryVar.Obj is GodotObject obj ? new LeaderboardEntryData(obj) : null;
+                callback?.Invoke(entry, ioError);
+            });
+            Instance.Call("UploadLeaderboardScore", leaderboard, score, callable);
+        }
+
+        public static void UploadLeaderboardScoreWithDetails(string leaderboard, int score, int[] details, Action<LeaderboardEntryData, bool> callback)
+        {
+            Callable callable = Callable.From((Variant entryVar, bool ioError) =>
+            {
+                LeaderboardEntryData entry = entryVar.Obj is GodotObject obj ? new LeaderboardEntryData(obj) : null;
+                callback?.Invoke(entry, ioError);
+            });
+            Instance.Call("UploadLeaderboardScoreWithDetails", leaderboard, score, new PackedInt32Array(details), callable);
+        }
 
         private static List<LeaderboardEntryData> ExtractLeaderboardEntries(Variant entriesVar)
         {

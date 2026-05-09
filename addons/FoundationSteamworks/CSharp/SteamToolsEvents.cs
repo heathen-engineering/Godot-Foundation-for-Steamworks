@@ -65,6 +65,7 @@ namespace Heathen.SteamworksIntegration
 
         // --- Leaderboards ---
         public static event Action<string> OnLeaderboardFound;
+        public static event Action<LeaderboardEntryData, bool> OnLeaderboardScoreUploaded;
 
         // --- Game Server ---
         public static event Action<SteamResult, bool> OnSteamGameServerConnectFailure;
@@ -165,6 +166,12 @@ namespace Heathen.SteamworksIntegration
 
             singleton.Connect("OnLeaderboardFound", Callable.From((string name) =>
                 OnLeaderboardFound?.Invoke(name)));
+
+            singleton.Connect("OnLeaderboardScoreUploaded", Callable.From((Variant entryVar, bool ioError) =>
+            {
+                LeaderboardEntryData entry = entryVar.Obj is GodotObject obj ? new LeaderboardEntryData(obj) : null;
+                OnLeaderboardScoreUploaded?.Invoke(entry, ioError);
+            }));
 
             singleton.Connect("OnSteamGameServerConnectFailure", Callable.From((int result, bool stillRetrying) =>
                 OnSteamGameServerConnectFailure?.Invoke((SteamResult)result, stillRetrying)));
