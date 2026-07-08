@@ -15,3 +15,14 @@ export_credentials.cfg
 .mono/
 data_*/
 mono_crash.*.json
+
+# Steamworks SDK — Valve's SDK license prohibits redistribution in source form.
+# Vendor it locally at addons/FoundationSteamworks/include/sdk/ (see SteamSDKGoesHere.md).
+addons/FoundationSteamworks/include/sdk/
+
+# CMake build directory
+addons/FoundationSteamworks/build/
+
+# Compiled GDExtension binaries — never committed. CI builds and packages these;
+# for local dev, build from source (see README) or grab a Release zip.
+addons/FoundationSteamworks/bin/

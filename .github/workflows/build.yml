@@ -1,0 +1,122 @@
+name: Build
+
+on:
+  push:
+    paths-ignore:
+      - '*.md'
+      - '.gitignore'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+        config:
+          - { name: Linux, os: ubuntu-latest }
+          - { name: Windows, os: windows-latest }
+          - { name: macOS, os: macos-latest }
+
+    name: Build / ${{ matrix.config.name }} (${{ matrix.build_type }})
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # The Steamworks SDK is never committed to this repo — Valve's SDK license
+      # prohibits redistributing the SDK source/headers/import libs. It's fetched
+      # privately here from a dedicated, access-locked repo via a fine-scoped PAT
+      # (Contents: read, scoped to that repo only). See addons/FoundationSteamworks/
+      # include/SteamSDKGoesHere.md for the local-dev equivalent of this step.
+      - name: Fetch Steamworks SDK
+        env:
+          GH_TOKEN: ${{ secrets.STEAM_SDK_FETCH_TOKEN }}
+        shell: bash
+        run: |
+          gh release download v1.63.0 \
+            --repo heathen-engineering/steamworks-sdk-vendor \
+            --pattern "steamworks-sdk.zip" \
+            --output steamworks-sdk.zip
+          mkdir -p addons/FoundationSteamworks/include
+          unzip -q steamworks-sdk.zip -d addons/FoundationSteamworks/include
+          rm steamworks-sdk.zip
+
+      - name: Install Ninja (Linux)
+        if: matrix.config.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install Ninja (macOS)
+        if: matrix.config.os == 'macos-latest'
+        run: brew install ninja
+
+      - name: Install Ninja (Windows)
+        if: matrix.config.os == 'windows-latest'
+        run: choco upgrade ninja
+
+      - name: Setup MSVC (Windows)
+        if: matrix.config.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S addons/FoundationSteamworks -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FoundationSteamworks-${{ matrix.config.name }}-${{ matrix.build_type }}
+          path: addons/FoundationSteamworks/bin/*
+          if-no-files-found: error
+
+  package:
+    name: Package addon
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: FoundationSteamworks-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Assemble addon package
+        run: |
+          mkdir -p package/addons/FoundationSteamworks
+          cp -r addons/FoundationSteamworks/CSharp package/addons/FoundationSteamworks/
+          cp -r addons/FoundationSteamworks/src package/addons/FoundationSteamworks/
+          cp addons/FoundationSteamworks/plugin.cfg package/addons/FoundationSteamworks/
+          cp addons/FoundationSteamworks/FoundationSteamworks.gdextension package/addons/FoundationSteamworks/
+          cp addons/FoundationSteamworks/FoundationAutoload.tscn package/addons/FoundationSteamworks/
+          mkdir -p package/addons/FoundationSteamworks/bin
+          cp artifacts/* package/addons/FoundationSteamworks/bin/
+          cp README.md package/addons/FoundationSteamworks/
+          cp LICENSE package/addons/FoundationSteamworks/
+          cd package && zip -r ../FoundationSteamworks.zip addons
+
+      - name: Upload packaged addon
+        uses: actions/upload-artifact@v4
+        with:
+          name: FoundationSteamworks
+          path: FoundationSteamworks.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: FoundationSteamworks.zip

@@ -50,6 +50,17 @@ All Steam callback events are surfaced as Godot signals on the `SteamApi` node.
 
 -----
 
+## Foundation vs. Toolkit — what's owned where
+
+Mirrors [Unity Foundation for Steamworks](https://github.com/heathen-engineering/Unity-Foundation-for-Steamworks)' split with [Toolkit for Steamworks](https://github.com/heathen-engineering/Unity-Toolkit-for-Steamworks) exactly, including the namespace: both packages share `Heathen.SteamworksIntegration`/`.API` — the split is by package, not by namespace, so nothing needs renaming if you later add Toolkit.
+
+- **User, Achievements, Stats, Leaderboards, App/Utilities** — Foundation owns these **fully**: the data types *and* every operation. Usable standalone; nothing about them requires Toolkit.
+- **Everything else** (Lobby/Matchmaking, Friends beyond the basics, Inventory, UGC/Workshop, Input, Overlay, Parties, RemoteStorage, RemotePlay, Screenshots, Voice, Timeline, Clans) — Foundation owns the **data types and native SDK plumbing only** (`LobbyData`, `ItemData`, `ClanData`, the `SteamApi` singleton's native methods for these sections). The *convenience* operational surface — `LobbyDataExtensions`, `API.Matchmaking`, and friends — is Toolkit's to add, matching Unity's `XxxDataExtensions` pattern exactly. You can still call these sections directly off `SteamApi`/`SteamTools.cs` today; Toolkit exists to make that ergonomic (typed extension methods, workflow components), not to unlock capability Foundation lacks.
+
+The native `SteamApi` GDExtension plays the role Steamworks.NET plays in the Unity stack: a complete low-level SDK wrap that both tiers sit on top of. There's no native/C++ split between Foundation and Toolkit — Toolkit (when present) calls the same compiled `SteamApi` singleton Foundation ships, via the same `Engine.GetSingleton("SteamApi")` + `Variant.Call` boundary Foundation's own C# facade already uses, so Toolkit never needs its own copy of the Steamworks SDK or a C++ build step.
+
+-----
+
 ## Requirements
 
 - **Godot 4.6** or compatible
@@ -125,7 +136,7 @@ The `CMakeLists.txt` exposes two cache variables you can override:
 
 ## Usage
 
-> **Toolkit for Steamworks** — available to [GitHub Sponsors](https://github.com/sponsors/heathen-engineering) — extends Foundation's C# layer with a `SteamTools` singleton and strongly-typed wrappers covering the **full Steamworks SDK**: Lobbies, Inventory, Friends, Remote Play, Timeline, Game Server, and more. All Toolkit wrappers follow the same `UserData`, `StatData`, `AchievementData`, and `LeaderboardData` patterns found in Foundation.
+> **Toolkit for Steamworks** — available to [GitHub Sponsors](https://github.com/sponsors/heathen-engineering) — extends Foundation's C# layer with strongly-typed `XxxDataExtensions` and `API.*` wrappers covering the ergonomic surface of the **full Steamworks SDK**: Lobbies, Inventory, Friends, Remote Play, Timeline, and more. Toolkit has no native SDK layer of its own — every call it makes goes through Foundation's `SteamApi` singleton, the same one your own code talks to. All Toolkit wrappers follow the same `UserData`, `StatData`, `AchievementData`, and `LeaderboardData` patterns found in Foundation.
 
 ### GDScript
 
@@ -183,16 +194,13 @@ public partial class MyNode : Node
 
 ## AutoLoad Order When Used with Toolkit
 
-If you install **Toolkit for Steamworks** alongside Foundation, load order and `AutoInitialise` settings are important:
+Only one AutoLoad is needed, whether or not Toolkit is installed:
 
 | AutoLoad Name | Scene | AutoInitialise |
 |---------------|-------|----------------|
-| `SteamApi` | `FoundationAutoload.tscn` | **false** |
-| `SteamTools` | `ToolkitAutoload.tscn` | **true** |
+| `SteamApi` | `FoundationAutoload.tscn` | **true** |
 
-Foundation must be loaded first — it registers all base types and owns the Steam callback loop (`SteamAPI_RunCallbacks`). Toolkit owns initialisation when both are present, so set Foundation's `AutoInitialise` to `false` to avoid calling `SteamAPI_Init` twice.
-
-When using **Foundation alone**, keep `AutoInitialise` set to `true`.
+Foundation is the sole owner of the Steam callback loop (`SteamAPI_Init`/`SteamAPI_RunCallbacks`) and all base types. Toolkit has no native singleton of its own and no init lifecycle to arbitrate — its C# `XxxDataExtensions`/`API.*` classes call straight into this same `SteamApi` singleton, so there's nothing extra to configure when adding Toolkit to a project.
 
 -----
 

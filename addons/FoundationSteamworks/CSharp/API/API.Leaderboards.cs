@@ -37,5 +37,27 @@ namespace Heathen.SteamworksIntegration.API
 
         public static void UploadScoreWithDetails(string leaderboard, int score, int[] details, Action<LeaderboardEntryData, bool> callback) =>
             SteamTools.UploadLeaderboardScoreWithDetails(leaderboard, score, details, callback);
+
+        /// <summary>Mirrors Unity Foundation's API.Leaderboards.Client nesting for call-site parity.</summary>
+        public static class Client
+        {
+            public static void DownloadGlobalEntries(string leaderboard, int start, int end, int detailCount, Action<List<LeaderboardEntryData>, bool> callback) =>
+                Leaderboards.DownloadGlobalEntries(leaderboard, start, end, detailCount, callback);
+            public static void DownloadAroundUserEntries(string leaderboard, int start, int end, int detailCount, Action<List<LeaderboardEntryData>, bool> callback) =>
+                Leaderboards.DownloadAroundUserEntries(leaderboard, start, end, detailCount, callback);
+            public static void DownloadFriendsEntries(string leaderboard, int start, int end, int detailCount, Action<List<LeaderboardEntryData>, bool> callback) =>
+                Leaderboards.DownloadFriendsEntries(leaderboard, start, end, detailCount, callback);
+            public static void Find(string leaderboard) => Leaderboards.Find(leaderboard);
+            public static void FindOrCreate(string leaderboard, bool lowestScoreIsTopRank = false, int displayType = 1) =>
+                Leaderboards.FindOrCreate(leaderboard, lowestScoreIsTopRank, displayType);
+            public static ulong GetNativeId(string leaderboard) => Leaderboards.GetNativeId(leaderboard);
+            public static int GetEntryCount(string leaderboard) => Leaderboards.GetEntryCount(leaderboard);
+            public static string GetName(string leaderboard) => Leaderboards.GetName(leaderboard);
+            public static bool IsTopRankLowestScore(string leaderboard) => Leaderboards.IsTopRankLowestScore(leaderboard);
+            public static void UploadScore(string leaderboard, int score, Action<LeaderboardEntryData, bool> callback) =>
+                Leaderboards.UploadScore(leaderboard, score, callback);
+            public static void UploadScoreWithDetails(string leaderboard, int score, int[] details, Action<LeaderboardEntryData, bool> callback) =>
+                Leaderboards.UploadScoreWithDetails(leaderboard, score, details, callback);
+        }
     }
 }

@@ -11,13 +11,52 @@
 
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/engine.hpp>
-#include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
 using namespace godot;
 
 SteamApi *SteamApi::singleton = nullptr;
+
+namespace
+{
+/// Editor-only RAII guard telling the Steamworks SDK which App ID to init against via
+/// the SteamAppId environment variable, instead of steam_appid.txt. Avoids a file on
+/// disk that can go stale, get forgotten, or drift out of sync with AppId — ported
+/// from O3DE's FoundationSteamworksSystemComponent.cpp ScopedSteamAppIdEnv. No-ops
+/// outside the editor (packaged builds are launched through Steam, which already
+/// knows the App ID) and restores whatever value was previously set on scope exit.
+struct ScopedSteamAppIdEnv
+{
+    bool active = false;
+    bool had_previous = false;
+    String previous;
+
+    explicit ScopedSteamAppIdEnv(int app_id, bool in_editor)
+    {
+        if (app_id <= 0 || !in_editor)
+            return;
+
+        OS *os = OS::get_singleton();
+        had_previous = os->has_environment("SteamAppId");
+        if (had_previous)
+            previous = os->get_environment("SteamAppId");
+        os->set_environment("SteamAppId", String::num_int64(app_id));
+        active = true;
+    }
+
+    ~ScopedSteamAppIdEnv()
+    {
+        if (!active)
+            return;
+        OS *os = OS::get_singleton();
+        if (had_previous)
+            os->set_environment("SteamAppId", previous);
+        else
+            os->unset_environment("SteamAppId");
+    }
+};
+} // namespace
 
 void SteamApi::ClientArtifactLoad()
 {
@@ -160,14 +199,15 @@ Ref<SteamInitialisationResponse> SteamApi::InitialiseClient()
     }
     if (singleton->debug) UtilityFunctions::print("[SteamApi] Steam is running");
 
-    bool requiresRestart = false;
-    if (Engine::get_singleton()->has_singleton("EditorInterface"))
+    const bool in_editor = Engine::get_singleton()->has_singleton("EditorInterface");
+    ScopedSteamAppIdEnv appIdGuard(singleton->appId, in_editor);
+    if (in_editor)
     {
-        if (singleton->debug) UtilityFunctions::print("[SteamApi] Editor detected; writing steam_appid.txt");
-        if (const Ref<FileAccess> file = FileAccess::open("steam_appid.txt", FileAccess::WRITE); file.is_valid())
-            file->store_line(String::num_int64(singleton->appId));
+        if (singleton->debug) UtilityFunctions::print("[SteamApi] Editor detected; SteamAppId env var set to ", singleton->appId);
     }
-    else
+
+    bool requiresRestart = false;
+    if (!in_editor)
     {
         requiresRestart = SteamAPI_RestartAppIfNecessary(static_cast<AppId_t>(singleton->appId));
         singleton->initialisationResponse->bShouldRestart = requiresRestart;
@@ -217,12 +257,11 @@ Ref<SteamInitialisationResponse> SteamApi::InitialiseServer()
 
     if (singleton->debug) UtilityFunctions::print("[SteamApi] Beginning server initialisation (App ID: ", singleton->appId, ", port: ", singleton->gamePort, ")");
 
-    if (Engine::get_singleton()->is_editor_hint())
+    const bool in_editor = Engine::get_singleton()->is_editor_hint();
+    ScopedSteamAppIdEnv appIdGuard(singleton->appId, in_editor);
+    if (in_editor)
     {
-        if (singleton->debug) UtilityFunctions::print("[SteamApi] Editor detected; writing steam_appid.txt");
-        Ref<FileAccess> file = FileAccess::open("steam_appid.txt", FileAccess::WRITE);
-        if (file.is_valid())
-            file->store_line(String::num_int64(singleton->appId));
+        if (singleton->debug) UtilityFunctions::print("[SteamApi] Editor detected; SteamAppId env var set to ", singleton->appId);
     }
 
     uint16_t safe_game_port = static_cast<uint16_t>(Math::clamp(singleton->gamePort, 0, 65535));
@@ -509,7 +548,22 @@ void SteamApi::UploadLeaderboardScoreWithDetails(const String &leaderboard, int 
 
 void SteamApi::AttachLeaderboardFile(const String &file, const String &leaderboard, const Callable &callback)
 {
-    // Implemented via RemoteStorage file share then attach
+    // Steam has no "attach a raw file to a leaderboard entry" call — it's a two-step
+    // process: share the Cloud file to get a UGC handle (RemoteStorage::FileShare),
+    // then attach that handle to the leaderboard (UserStats::AttachLeaderboardUGC).
+    if (!GetIsReady() || !callback.is_valid())
+        return;
+
+    if (!singleton->LeaderboardMap.has(leaderboard))
+    {
+        callback.call(false);
+        return;
+    }
+
+    singleton->m_RemoteStorageFileShareResult_leaderboard = leaderboard;
+    singleton->m_RemoteStorageFileShareResult_callback = callback;
+    const auto handle = SteamRemoteStorage()->FileShare(file.utf8().get_data());
+    singleton->m_RemoteStorageFileShareResult_t.Set(handle, singleton, &SteamApi::OnRemoteStorageFileShareResult);
 }
 
 // --- Stats & Achievements ---
@@ -822,6 +876,244 @@ void SteamApi::LobbyMatchList(const Callable &callback)
     singleton->m_LobbyMatchList_callback = callback;
     const auto handle = SteamMatchmaking()->RequestLobbyList();
     singleton->m_LobbyMatchList_t.Set(handle, singleton, &SteamApi::OnLobbyMatchList);
+}
+
+// --- Matchmaking: lobby metadata/property plumbing ---
+// Raw SDK operations only — ported from the Toolkit for Steamworks scaffold, which
+// originally duplicated this natively; it now calls these instead of reimplementing them.
+namespace
+{
+    static constexpr const char *kLobbyDataName = "name";
+    static constexpr const char *kLobbyDataMode = "z_heathenMode";
+    static constexpr const char *kLobbyDataType = "z_heathenType";
+} // namespace
+
+void SteamApi::InviteUserToLobby(const Ref<LobbyData> &lobby, const Ref<UserData> &user)
+{
+    if (SteamMatchmaking())
+        SteamMatchmaking()->InviteUserToLobby(lobby->ToCSteamID(), user->ToCSteamID());
+}
+
+void SteamApi::SetLobbyData(const Ref<LobbyData> &lobby, const String &key, const String &value)
+{
+    if (SteamMatchmaking())
+        SteamMatchmaking()->SetLobbyData(lobby->ToCSteamID(), key.utf8().get_data(), value.utf8().get_data());
+}
+
+String SteamApi::GetLobbyData(const Ref<LobbyData> &lobby, const String &key)
+{
+    if (SteamMatchmaking())
+        return String(SteamMatchmaking()->GetLobbyData(lobby->ToCSteamID(), key.utf8().get_data()));
+    return "";
+}
+
+void SteamApi::SetLobbyMemberData(const Ref<LobbyData> &lobby, const String &key, const String &value)
+{
+    if (SteamMatchmaking())
+        SteamMatchmaking()->SetLobbyMemberData(lobby->ToCSteamID(), key.utf8().get_data(), value.utf8().get_data());
+}
+
+String SteamApi::GetLobbyMemberData(const Ref<LobbyData> &lobby, const Ref<UserData> &user, const String &key)
+{
+    if (SteamMatchmaking())
+        return String(SteamMatchmaking()->GetLobbyMemberData(lobby->ToCSteamID(), user->ToCSteamID(), key.utf8().get_data()));
+    return "";
+}
+
+String SteamApi::GetLobbyName(const Ref<LobbyData> &lobby)
+{
+    if (SteamMatchmaking())
+        return String(SteamMatchmaking()->GetLobbyData(lobby->ToCSteamID(), kLobbyDataName));
+    return "";
+}
+
+void SteamApi::SetLobbyName(const Ref<LobbyData> &lobby, const String &name)
+{
+    SetLobbyData(lobby, kLobbyDataName, name);
+}
+
+int SteamApi::GetLobbyMemberCount(const Ref<LobbyData> &lobby)
+{
+    if (SteamMatchmaking())
+        return SteamMatchmaking()->GetNumLobbyMembers(lobby->ToCSteamID());
+    return 0;
+}
+
+int SteamApi::GetLobbyMaxMembers(const Ref<LobbyData> &lobby)
+{
+    if (SteamMatchmaking())
+        return SteamMatchmaking()->GetLobbyMemberLimit(lobby->ToCSteamID());
+    return 0;
+}
+
+void SteamApi::SetLobbyMaxMembers(const Ref<LobbyData> &lobby, int max_members)
+{
+    if (SteamMatchmaking())
+        SteamMatchmaking()->SetLobbyMemberLimit(lobby->ToCSteamID(), max_members);
+}
+
+LobbyUseHint::Hint SteamApi::GetLobbyUseHint(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking())
+        return LobbyUseHint::Hint::General;
+    const char *value = SteamMatchmaking()->GetLobbyData(lobby->ToCSteamID(), kLobbyDataMode);
+    if (value == nullptr || strcmp(value, "") == 0 || strcmp(value, "General") == 0) return LobbyUseHint::Hint::General;
+    if (strcmp(value, "Session") == 0) return LobbyUseHint::Hint::Session;
+    if (strcmp(value, "Party") == 0) return LobbyUseHint::Hint::Party;
+    return LobbyUseHint::Hint::General;
+}
+
+void SteamApi::SetLobbyUseHint(const Ref<LobbyData> &lobby, LobbyUseHint::Hint hint)
+{
+    if (hint == LobbyUseHint::Hint::Session) SetLobbyData(lobby, kLobbyDataMode, "Session");
+    else if (hint == LobbyUseHint::Hint::Party) SetLobbyData(lobby, kLobbyDataMode, "Party");
+    else SetLobbyData(lobby, kLobbyDataMode, "General");
+}
+
+LobbyType::Type SteamApi::GetLobbyType(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking())
+        return LobbyType::Type::Public;
+    const char *value = SteamMatchmaking()->GetLobbyData(lobby->ToCSteamID(), kLobbyDataType);
+    if (value == nullptr || strcmp(value, "") == 0) return LobbyType::Type::Public;
+    if (strcmp(value, "Private") == 0) return LobbyType::Type::Private;
+    if (strcmp(value, "FriendOnly") == 0) return LobbyType::Type::FriendsOnly;
+    if (strcmp(value, "Public") == 0) return LobbyType::Type::Public;
+    if (strcmp(value, "Invisible") == 0) return LobbyType::Type::Invisible;
+    return LobbyType::Type::Public;
+}
+
+void SteamApi::SetLobbyType(const Ref<LobbyData> &lobby, LobbyType::Type type)
+{
+    if (!SteamMatchmaking()) return;
+    SteamMatchmaking()->SetLobbyType(lobby->ToCSteamID(), static_cast<ELobbyType>(type));
+    if (type == LobbyType::Type::Private) SetLobbyData(lobby, kLobbyDataType, "Private");
+    else if (type == LobbyType::Type::FriendsOnly) SetLobbyData(lobby, kLobbyDataType, "FriendOnly");
+    else if (type == LobbyType::Type::Public) SetLobbyData(lobby, kLobbyDataType, "Public");
+    else if (type == LobbyType::Type::Invisible) SetLobbyData(lobby, kLobbyDataType, "Invisible");
+}
+
+bool SteamApi::IsLobbyFull(const Ref<LobbyData> &lobby)
+{
+    return GetLobbyMemberCount(lobby) >= GetLobbyMaxMembers(lobby);
+}
+
+bool SteamApi::IsLobbyOwner(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking() || !SteamUser()) return false;
+    return SteamMatchmaking()->GetLobbyOwner(lobby->ToCSteamID()) == SteamUser()->GetSteamID();
+}
+
+void SteamApi::SetLobbyOwner(const Ref<LobbyData> &lobby, const Ref<UserData> &user)
+{
+    if (SteamMatchmaking())
+        SteamMatchmaking()->SetLobbyOwner(lobby->ToCSteamID(), user->ToCSteamID());
+}
+
+bool SteamApi::IsLobbyMember(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking() || !SteamUser()) return false;
+    const CSteamID lobbyId = lobby->ToCSteamID();
+    const int count = SteamMatchmaking()->GetNumLobbyMembers(lobbyId);
+    const CSteamID localUser = SteamUser()->GetSteamID();
+    for (int i = 0; i < count; i++)
+        if (SteamMatchmaking()->GetLobbyMemberByIndex(lobbyId, i) == localUser)
+            return true;
+    return false;
+}
+
+void SteamApi::SetLobbyJoinable(const Ref<LobbyData> &lobby, bool joinable)
+{
+    if (SteamMatchmaking())
+        SteamMatchmaking()->SetLobbyJoinable(lobby->ToCSteamID(), joinable);
+}
+
+void SteamApi::SetLobbyListenServer(const Ref<LobbyData> &lobby)
+{
+    if (SteamMatchmaking())
+        SteamMatchmaking()->SetLobbyGameServer(lobby->ToCSteamID(), 0, 0, SteamMatchmaking()->GetLobbyOwner(lobby->ToCSteamID()));
+}
+
+void SteamApi::SetLobbyDedicatedServer(const Ref<LobbyData> &lobby, uint64_t serverId, const String &ip, uint16_t port)
+{
+    if (!SteamMatchmaking()) return;
+    const uint32 unIP = IpStringToUint(ip);
+    SteamMatchmaking()->SetLobbyGameServer(lobby->ToCSteamID(), unIP, port, CSteamID(static_cast<uint64>(serverId)));
+}
+
+bool SteamApi::LobbyHasGameServer(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking()) return false;
+    uint32 unIP = 0;
+    uint16 usPort = 0;
+    CSteamID steamServerID;
+    return SteamMatchmaking()->GetLobbyGameServer(lobby->ToCSteamID(), &unIP, &usPort, &steamServerID);
+}
+
+uint64_t SteamApi::GetLobbyServerId(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking()) return 0;
+    uint32 unIP = 0;
+    uint16 usPort = 0;
+    CSteamID steamServerID;
+    SteamMatchmaking()->GetLobbyGameServer(lobby->ToCSteamID(), &unIP, &usPort, &steamServerID);
+    return steamServerID.ConvertToUint64();
+}
+
+String SteamApi::GetLobbyServerIp(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking()) return "";
+    uint32 unIP = 0;
+    uint16 usPort = 0;
+    CSteamID steamServerID;
+    SteamMatchmaking()->GetLobbyGameServer(lobby->ToCSteamID(), &unIP, &usPort, &steamServerID);
+    return IpUintToString(unIP);
+}
+
+uint16_t SteamApi::GetLobbyServerPort(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking()) return 0;
+    uint32 unIP = 0;
+    uint16 usPort = 0;
+    CSteamID steamServerID;
+    SteamMatchmaking()->GetLobbyGameServer(lobby->ToCSteamID(), &unIP, &usPort, &steamServerID);
+    return usPort;
+}
+
+TypedArray<UserData> SteamApi::GetLobbyMemberList(const Ref<LobbyData> &lobby)
+{
+    TypedArray<UserData> members;
+    if (!SteamMatchmaking()) return members;
+    const CSteamID lobbyId = lobby->ToCSteamID();
+    const int count = SteamMatchmaking()->GetNumLobbyMembers(lobbyId);
+    for (int i = 0; i < count; i++)
+        members.append(memnew(UserData(SteamMatchmaking()->GetLobbyMemberByIndex(lobbyId, i))));
+    return members;
+}
+
+Ref<UserData> SteamApi::GetLobbyOwner(const Ref<LobbyData> &lobby)
+{
+    if (!SteamMatchmaking()) return {};
+    return Ref<UserData>(memnew(UserData(SteamMatchmaking()->GetLobbyOwner(lobby->ToCSteamID()))));
+}
+
+bool SteamApi::SendLobbyChatMessage(const Ref<LobbyData> &lobby, const String &message)
+{
+    if (!SteamMatchmaking()) return false;
+    const std::string utf8 = message.utf8().get_data();
+    return SteamMatchmaking()->SendLobbyChatMsg(lobby->ToCSteamID(), utf8.c_str(), static_cast<int>(utf8.size()));
+}
+
+void SteamApi::ActivateLobbyInviteDialog(const Ref<LobbyData> &lobby)
+{
+    if (SteamFriends())
+        SteamFriends()->ActivateGameOverlayInviteDialog(lobby->ToCSteamID());
+}
+
+void SteamApi::ActivateLobbyRemotePlayTogetherInviteDialog(const Ref<LobbyData> &lobby)
+{
+    if (SteamFriends())
+        SteamFriends()->ActivateGameOverlayRemotePlayTogetherInviteDialog(lobby->ToCSteamID());
 }
 
 // --- Utilities ---
@@ -1617,6 +1909,55 @@ void SteamApi::EventGameOverlayActivated(GameOverlayActivated_t *pCallback)
     emit_signal("OnGameOverlayActivated", static_cast<bool>(pCallback->m_bActive));
 }
 
+void SteamApi::PopulateItemDefinitionProperties(SteamItemDef_t definitionId, Dictionary &out_properties, Dictionary &out_tags)
+{
+    // Passing nullptr for pchPropertyName is documented Steamworks behaviour: it returns
+    // the full list of defined property names for this item definition as a comma
+    // delimited string, using the SDK's standard two-call size-then-fetch idiom.
+    uint32 nameBufSize = 0;
+    SteamInventory()->GetItemDefinitionProperty(definitionId, nullptr, nullptr, &nameBufSize);
+    if (nameBufSize == 0)
+        return;
+
+    std::vector<char> nameBuf(nameBufSize);
+    if (!SteamInventory()->GetItemDefinitionProperty(definitionId, nullptr, nameBuf.data(), &nameBufSize))
+        return;
+
+    const PackedStringArray names = String(nameBuf.data()).split(",");
+    for (int i = 0; i < names.size(); i++)
+    {
+        const String key = names[i].strip_edges();
+        if (key.is_empty())
+            continue;
+
+        const CharString keyUtf8 = key.utf8();
+        uint32 valueBufSize = 0;
+        SteamInventory()->GetItemDefinitionProperty(definitionId, keyUtf8.get_data(), nullptr, &valueBufSize);
+        if (valueBufSize == 0)
+            continue;
+
+        std::vector<char> valueBuf(valueBufSize);
+        if (!SteamInventory()->GetItemDefinitionProperty(definitionId, keyUtf8.get_data(), valueBuf.data(), &valueBufSize))
+            continue;
+
+        const String value = String(valueBuf.data());
+        out_properties[key] = value;
+
+        // Convention: item definitions carry their tags in a "tags" property as a
+        // comma delimited list of tag values. Stored as a set-like Dictionary (tag -> true).
+        if (key == "tags")
+        {
+            const PackedStringArray tagParts = value.split(",");
+            for (int t = 0; t < tagParts.size(); t++)
+            {
+                const String tag = tagParts[t].strip_edges();
+                if (!tag.is_empty())
+                    out_tags[tag] = true;
+            }
+        }
+    }
+}
+
 void SteamApi::EventSteamInventoryResultReady(SteamInventoryResultReady_t *pCallback)
 {
     const int handle = static_cast<int>(pCallback->m_handle);
@@ -1651,6 +1992,15 @@ void SteamApi::EventSteamInventoryResultReady(SteamInventoryResultReady_t *pCall
                 item->setDefinitionId(static_cast<int>(details[i].m_iDefinition));
                 item->setQuantity(static_cast<int>(details[i].m_unQuantity));
                 item->setFlags(static_cast<int>(details[i].m_unFlags));
+
+                Dictionary properties;
+                Dictionary tags;
+                PopulateItemDefinitionProperties(details[i].m_iDefinition, properties, tags);
+                item->setProperties(properties);
+                item->setTags(tags);
+                // dynamicProperties (per-instance JSON via GetResultItemProperty) is not
+                // yet populated — left as a known gap pending SDK-version verification.
+
                 items.append(item);
             }
         }
@@ -1764,9 +2114,9 @@ void SteamApi::OnLobbyCreated(LobbyCreated_t *pResult, bool bIOFailure)
     }
     Ref<LobbyData> lobby = memnew(LobbyData(pResult->m_ulSteamIDLobby));
     if (m_LobbyCreatedHint == LobbyUseHint::Hint::Session)
-        lobby->SetUseHint(LobbyUseHint::Hint::Session);
+        SetLobbyUseHint(lobby, LobbyUseHint::Hint::Session);
     else if (m_LobbyCreatedHint == LobbyUseHint::Hint::Party)
-        lobby->SetUseHint(LobbyUseHint::Hint::Party);
+        SetLobbyUseHint(lobby, LobbyUseHint::Hint::Party);
     MemberOfLobbies.append(static_cast<int64_t>(pResult->m_ulSteamIDLobby));
     emit_signal("OnLobbyCreated", lobby);
     m_LobbyCreated_callback.call(lobby);
@@ -1860,7 +2210,27 @@ void SteamApi::OnGlobalStatsReceived(GlobalStatsReceived_t *pResult, bool bIOFai
 
 void SteamApi::OnRemoteStorageFileShareResult(RemoteStorageFileShareResult_t *pResult, bool bIOFailure)
 {
-    // Used for leaderboard file attachment
+    Callable callback = m_RemoteStorageFileShareResult_callback;
+    const String leaderboard = m_RemoteStorageFileShareResult_leaderboard;
+    m_RemoteStorageFileShareResult_callback = Callable();
+    m_RemoteStorageFileShareResult_leaderboard = String();
+
+    if (bIOFailure || pResult->m_eResult != k_EResultOK || !LeaderboardMap.has(leaderboard))
+    {
+        callback.call(false);
+        return;
+    }
+
+    m_LeaderboardUgcSet_callback = callback;
+    const auto apiCall = SteamUserStats()->AttachLeaderboardUGC(LeaderboardMap.get(leaderboard), pResult->m_hFile);
+    m_LeaderboardUgcSet_t.Set(apiCall, this, &SteamApi::OnLeaderboardUgcSet);
+}
+
+void SteamApi::OnLeaderboardUgcSet(LeaderboardUGCSet_t *pResult, bool bIOFailure)
+{
+    Callable callback = m_LeaderboardUgcSet_callback;
+    m_LeaderboardUgcSet_callback = Callable();
+    callback.call(!bIOFailure && pResult->m_eResult == k_EResultOK);
 }
 
 void SteamApi::OnLeaderboardScoreUploaded(LeaderboardScoreUploaded_t *pResult, bool bIOFailure)
@@ -2009,6 +2379,7 @@ void SteamApi::_bind_methods()
     ClassDB::bind_static_method("SteamApi", D_METHOD("DownloadLeaderboardEntriesForUserIds", "users", "detailCount", "leaderboard", "callback"), &SteamApi::DownloadLeaderboardEntriesForUserIds);
     ClassDB::bind_static_method("SteamApi", D_METHOD("UploadLeaderboardScore", "leaderboard", "score", "callback"), &SteamApi::UploadLeaderboardScore);
     ClassDB::bind_static_method("SteamApi", D_METHOD("UploadLeaderboardScoreWithDetails", "leaderboard", "score", "details", "callback"), &SteamApi::UploadLeaderboardScoreWithDetails);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("AttachLeaderboardFile", "file", "leaderboard", "callback"), &SteamApi::AttachLeaderboardFile);
 
     // Stats & Achievements
     ClassDB::bind_static_method("SteamApi", D_METHOD("GetNumberOfCurrentPlayers", "callback"), &SteamApi::GetNumberOfCurrentPlayers);
@@ -2054,6 +2425,37 @@ void SteamApi::_bind_methods()
     ClassDB::bind_static_method("SteamApi", D_METHOD("JoinLobbyById", "lobbyId", "callback"), &SteamApi::JoinLobbyById);
     ClassDB::bind_static_method("SteamApi", D_METHOD("JoinLobbyByHex", "hexId", "callback"), &SteamApi::JoinLobbyByHex);
     ClassDB::bind_static_method("SteamApi", D_METHOD("LobbyMatchList", "callback"), &SteamApi::LobbyMatchList);
+
+    ClassDB::bind_static_method("SteamApi", D_METHOD("InviteUserToLobby", "lobby", "user"), &SteamApi::InviteUserToLobby);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyData", "lobby", "key", "value"), &SteamApi::SetLobbyData);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyData", "lobby", "key"), &SteamApi::GetLobbyData);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyMemberData", "lobby", "key", "value"), &SteamApi::SetLobbyMemberData);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyMemberData", "lobby", "user", "key"), &SteamApi::GetLobbyMemberData);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyName", "lobby"), &SteamApi::GetLobbyName);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyName", "lobby", "name"), &SteamApi::SetLobbyName);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyMemberCount", "lobby"), &SteamApi::GetLobbyMemberCount);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyMaxMembers", "lobby"), &SteamApi::GetLobbyMaxMembers);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyMaxMembers", "lobby", "maxMembers"), &SteamApi::SetLobbyMaxMembers);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyUseHint", "lobby"), &SteamApi::GetLobbyUseHint);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyUseHint", "lobby", "hint"), &SteamApi::SetLobbyUseHint);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyType", "lobby"), &SteamApi::GetLobbyType);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyType", "lobby", "type"), &SteamApi::SetLobbyType);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("IsLobbyFull", "lobby"), &SteamApi::IsLobbyFull);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("IsLobbyOwner", "lobby"), &SteamApi::IsLobbyOwner);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyOwner", "lobby", "user"), &SteamApi::SetLobbyOwner);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("IsLobbyMember", "lobby"), &SteamApi::IsLobbyMember);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyJoinable", "lobby", "joinable"), &SteamApi::SetLobbyJoinable);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyListenServer", "lobby"), &SteamApi::SetLobbyListenServer);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SetLobbyDedicatedServer", "lobby", "serverId", "ip", "port"), &SteamApi::SetLobbyDedicatedServer);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("LobbyHasGameServer", "lobby"), &SteamApi::LobbyHasGameServer);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyServerId", "lobby"), &SteamApi::GetLobbyServerId);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyServerIp", "lobby"), &SteamApi::GetLobbyServerIp);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyServerPort", "lobby"), &SteamApi::GetLobbyServerPort);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyMemberList", "lobby"), &SteamApi::GetLobbyMemberList);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("GetLobbyOwner", "lobby"), &SteamApi::GetLobbyOwner);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("SendLobbyChatMessage", "lobby", "message"), &SteamApi::SendLobbyChatMessage);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("ActivateLobbyInviteDialog", "lobby"), &SteamApi::ActivateLobbyInviteDialog);
+    ClassDB::bind_static_method("SteamApi", D_METHOD("ActivateLobbyRemotePlayTogetherInviteDialog", "lobby"), &SteamApi::ActivateLobbyRemotePlayTogetherInviteDialog);
 
     // Input
     ClassDB::bind_static_method("SteamApi", D_METHOD("InputInit", "explicitlyCallRunFrame"), &SteamApi::InputInit);

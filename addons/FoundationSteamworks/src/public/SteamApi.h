@@ -85,6 +85,11 @@ private:
 
     static Dictionary GameServerItemToDictionary(gameserveritem_t *serverItem);
 
+    // Enumerates an item definition's static KV properties via the documented
+    // GetItemDefinitionProperty(id, nullptr, ...) "list of property names" idiom.
+    // 'tags' is derived from the conventional comma-delimited "tags" property, if present.
+    static void PopulateItemDefinitionProperties(SteamItemDef_t definitionId, Dictionary &out_properties, Dictionary &out_tags);
+
     ISteamMatchmakingServerListResponse *server_list_response = this;
     ISteamMatchmakingPingResponse *ping_response = this;
     ISteamMatchmakingPlayersResponse *players_response = this;
@@ -234,6 +239,40 @@ public:
     static void JoinLobbyById(int64_t lobby_id, const Callable &callback);
     static void JoinLobbyByHex(const String &hexId, const Callable &callback);
     static void LobbyMatchList(const Callable &callback);
+
+    // --- Matchmaking: lobby metadata/property plumbing ---
+    // Raw SDK operations only — the ergonomic LobbyDataExtensions convenience layer
+    // (defaults, chaining, higher-level workflows) is Toolkit for Steamworks' to add.
+    static void InviteUserToLobby(const Ref<LobbyData> &lobby, const Ref<UserData> &user);
+    static void SetLobbyData(const Ref<LobbyData> &lobby, const String &key, const String &value);
+    static String GetLobbyData(const Ref<LobbyData> &lobby, const String &key);
+    static void SetLobbyMemberData(const Ref<LobbyData> &lobby, const String &key, const String &value);
+    static String GetLobbyMemberData(const Ref<LobbyData> &lobby, const Ref<UserData> &user, const String &key);
+    static String GetLobbyName(const Ref<LobbyData> &lobby);
+    static void SetLobbyName(const Ref<LobbyData> &lobby, const String &name);
+    static int GetLobbyMemberCount(const Ref<LobbyData> &lobby);
+    static int GetLobbyMaxMembers(const Ref<LobbyData> &lobby);
+    static void SetLobbyMaxMembers(const Ref<LobbyData> &lobby, int max_members);
+    static LobbyUseHint::Hint GetLobbyUseHint(const Ref<LobbyData> &lobby);
+    static void SetLobbyUseHint(const Ref<LobbyData> &lobby, LobbyUseHint::Hint hint);
+    static LobbyType::Type GetLobbyType(const Ref<LobbyData> &lobby);
+    static void SetLobbyType(const Ref<LobbyData> &lobby, LobbyType::Type type);
+    static bool IsLobbyFull(const Ref<LobbyData> &lobby);
+    static bool IsLobbyOwner(const Ref<LobbyData> &lobby);
+    static void SetLobbyOwner(const Ref<LobbyData> &lobby, const Ref<UserData> &user);
+    static bool IsLobbyMember(const Ref<LobbyData> &lobby);
+    static void SetLobbyJoinable(const Ref<LobbyData> &lobby, bool joinable);
+    static void SetLobbyListenServer(const Ref<LobbyData> &lobby);
+    static void SetLobbyDedicatedServer(const Ref<LobbyData> &lobby, uint64_t serverId, const String &ip, uint16_t port);
+    static bool LobbyHasGameServer(const Ref<LobbyData> &lobby);
+    static uint64_t GetLobbyServerId(const Ref<LobbyData> &lobby);
+    static String GetLobbyServerIp(const Ref<LobbyData> &lobby);
+    static uint16_t GetLobbyServerPort(const Ref<LobbyData> &lobby);
+    static TypedArray<UserData> GetLobbyMemberList(const Ref<LobbyData> &lobby);
+    static Ref<UserData> GetLobbyOwner(const Ref<LobbyData> &lobby);
+    static bool SendLobbyChatMessage(const Ref<LobbyData> &lobby, const String &message);
+    static void ActivateLobbyInviteDialog(const Ref<LobbyData> &lobby);
+    static void ActivateLobbyRemotePlayTogetherInviteDialog(const Ref<LobbyData> &lobby);
 
     // --- Remote Storage ---
     static bool FileWrite(const String &fileName, const PackedByteArray &data);
@@ -424,6 +463,10 @@ private:
     String m_RemoteStorageFileShareResult_leaderboard;
     Callable m_RemoteStorageFileShareResult_callback;
     void OnRemoteStorageFileShareResult(RemoteStorageFileShareResult_t *pResult, bool bIOFailure);
+
+    CCallResult<SteamApi, LeaderboardUGCSet_t> m_LeaderboardUgcSet_t;
+    Callable m_LeaderboardUgcSet_callback;
+    void OnLeaderboardUgcSet(LeaderboardUGCSet_t *pResult, bool bIOFailure);
 
     CCallResult<SteamApi, CreateBeaconCallback_t> m_CreateBeacon_t;
     Callable m_CreateBeacon_callback;
