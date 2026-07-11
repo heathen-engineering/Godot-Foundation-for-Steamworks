@@ -70,7 +70,7 @@ The native `SteamApi` GDExtension plays the role Steamworks.NET plays in the Uni
 - **Steamworks SDK 1.63** — download from the Steamworks partner portal and place in `addons/FoundationSteamworks/include/sdk/`
 - A C++ build environment (GCC/Clang + CMake) **only if building from source**
 
-> Pre-built binaries for Linux x86_64 are included. Windows and macOS builds require compiling from source using the provided `CMakeLists.txt`.
+> Pre-built binaries for **Windows, macOS, and Linux** (Debug and Release) are included — most developers never need to compile anything. Full source is included too, if you want to rebuild from scratch, audit the code, or modify it, using the provided `CMakeLists.txt`.
 
 -----
 
