@@ -31,6 +31,8 @@ Sponsors get access to our private SourceRepo, which includes **Toolkit for Stea
 
 Foundation provides a direct, strongly-typed interface to the Steamworks SDK from Godot 4 via GDExtension (C++). It is designed to be used from both **GDScript** and **C#**.
 
+For GDScript projects, a **Steamworks settings dock** (Project Settings → Plugins → enable Foundation for Steamworks) lets you configure your App ID, Achievements, Stats, Leaderboards, and DLC visually, then generates a type-safe `SteamGame.gd` wrapper plus the AutoLoad that initialises it — see [Installation](#installation) and [Usage](#usage).
+
 | System | Coverage |
 |--------|----------|
 | **App** | App ID, DLC enumeration, install info, beta names, launch parameters |
@@ -90,28 +92,35 @@ A `SteamSDKGoesHere.md` placeholder marks the correct location.
 
 ### 3. Enable the plugin
 
-In Godot, open **Project → Project Settings → Plugins** and enable **Foundation for Steamworks**.
+In Godot, open **Project → Project Settings → Plugins** and enable **Foundation for Steamworks**. This activates a **Steamworks** bottom-panel dock — the recommended way to configure the rest of this section.
 
-### 4. Add the AutoLoad scene
+### 4. Configure your App ID/Achievements/Stats/Leaderboards/DLC
 
-In **Project → Project Settings → AutoLoad**, add:
+Open the **Steamworks** dock (bottom panel). Set your App ID, and add your Achievement API names, Stat API names, Leaderboard names, and DLC App IDs — whatever your game actually uses. This is stored in `res://steam_settings.json`, plain JSON so it stays readable/diffable/portable, not a Godot-only Resource.
 
-| Name | Path |
-|------|------|
-| `SteamApi` | `res://addons/FoundationSteamworks/FoundationAutoload.tscn` |
+> ![Steamworks settings dock](docs/steamworks-dock.png)
 
-`SteamApi` must appear **before** any scene or node that accesses Steam.
+### 5. Click "Generate Code"
 
-### 5. Configure the node
+The dock's **Generate Code** button (top toolbar) does everything from here automatically:
 
-Select the `SteamApi` AutoLoad entry and configure it in the Inspector:
+- Writes `SteamGame.gd` — a type-safe wrapper over exactly what you configured (see [Usage](#usage) below).
+- Writes `SteamGameLoader.gd` next to it — a tiny bootstrap script.
+- Creates `SteamGameAutoload.tscn` (if it doesn't already exist) with that script attached, and registers it as the `SteamGameLoader` AutoLoad in Project Settings automatically — **you never manually add an AutoLoad entry yourself**.
+
+Regeneration also happens automatically every time you edit something in the dock, and Godot warns you (blocking Run with a one-click fix) if `SteamGame.gd` is ever out of sync with your settings — you shouldn't normally need to click the button more than once.
+
+`SteamGameLoader.gd`'s node (the actual AutoLoad, visible in **Project Settings → AutoLoad** as `SteamGameLoader`) exposes three properties you can tweak directly in the Inspector:
 
 | Property | Description |
 |----------|-------------|
-| **Debug** | Print verbose init steps to the Godot console |
-| **AppId** | Your Steam App ID (default: `480` — Spacewar test app) |
-| **AutoInitialise** | Initialise Steam automatically on `_ready` (default: `true`) |
-| **LeaderboardIds** | Array of leaderboard names to pre-resolve at startup |
+| `debug` | Print verbose init steps to the Godot console |
+| `auto_logon` | Log on to Steam automatically |
+| `auto_initialise` | Initialise Steam automatically on `_ready` (turn off if you want to gate Steam init behind, say, a menu button instead) |
+
+Your App ID lives in `steam_settings.json` (edited via the dock), not as an Inspector property — one source of truth, not two things that can drift out of sync.
+
+> **Manual/advanced alternative**: if you'd rather not use the dock/codegen at all, `FoundationAutoload.tscn` (the bare `SteamApi` node, with `AppId`/`Debug`/`AutoInitialise`/`AutoLogOn` as direct Inspector properties) is still there and still works — add it as an AutoLoad yourself the same way older versions of this README described. Nothing about the generated flow requires it; they're two independent ways to get `SteamApi` running.
 
 -----
 
@@ -138,7 +147,29 @@ The `CMakeLists.txt` exposes two cache variables you can override:
 
 > **Toolkit for Steamworks** — available to [GitHub Sponsors](https://github.com/sponsors/heathen-engineering) — extends Foundation's C# layer with strongly-typed `XxxDataExtensions` and `API.*` wrappers covering the ergonomic surface of the **full Steamworks SDK**: Lobbies, Inventory, Friends, Remote Play, Timeline, and more. Toolkit has no native SDK layer of its own — every call it makes goes through Foundation's `SteamApi` singleton, the same one your own code talks to. All Toolkit wrappers follow the same `UserData`, `StatData`, `AchievementData`, and `LeaderboardData` patterns found in Foundation.
 
-### GDScript
+### GDScript (recommended: generated `SteamGame` wrapper)
+
+Once you've configured Achievements/Stats/Leaderboards in the dock and clicked **Generate Code** (see [Installation](#installation)), every entry is a real, typo-checked field — Godot's own script parser flags a mistyped name as a parse error, not a runtime string that silently does nothing:
+
+```gdscript
+# Achievements
+SteamGame.Achievements.ACH_WIN_ONE_GAME.Unlock()
+SteamGame.Achievements.ACH_WIN_ONE_GAME.Store()
+
+# Stats
+SteamGame.Stats.NumWins.SetIntValue(SteamGame.Stats.NumWins.GetIntValue() + 1)
+
+# Leaderboards (download helpers only — score upload isn't ported to this
+# GDExtension yet, see LeaderboardData.h)
+SteamGame.Leaderboards.TopScores.DownloadGlobalEntries(1, 10, 0, func(entries):
+    print("Top 10: ", entries))
+```
+
+No `SteamApi.OnReady` wiring needed either — the generated `SteamGameLoader` AutoLoad already calls `SteamGame.Initialise()` for you on `_ready()`.
+
+### GDScript (direct `SteamApi`, no codegen)
+
+Still fully supported if you're not using the dock/codegen — the same raw calls the generated wrapper itself is built on:
 
 ```gdscript
 func _ready():
@@ -194,13 +225,14 @@ public partial class MyNode : Node
 
 ## AutoLoad Order When Used with Toolkit
 
-Only one AutoLoad is needed, whether or not Toolkit is installed:
+Only one AutoLoad is needed, whether or not Toolkit is installed — but which one depends on whether you're using the dock/codegen (recommended) or the manual node:
 
-| AutoLoad Name | Scene | AutoInitialise |
-|---------------|-------|----------------|
-| `SteamApi` | `FoundationAutoload.tscn` | **true** |
+| Setup | AutoLoad Name | Scene | Owns `SteamApi`? |
+|-------|---------------|-------|-------------------|
+| Dock + Generate Code (recommended) | `SteamGameLoader` | `SteamGameAutoload.tscn` | Created as a runtime child by `SteamGame.Initialise()` — not the AutoLoad's own root |
+| Manual (no codegen) | `SteamApi` | `FoundationAutoload.tscn` | Is the AutoLoad's own root |
 
-Foundation is the sole owner of the Steam callback loop (`SteamAPI_Init`/`SteamAPI_RunCallbacks`) and all base types. Toolkit has no native singleton of its own and no init lifecycle to arbitrate — its C# `XxxDataExtensions`/`API.*` classes call straight into this same `SteamApi` singleton, so there's nothing extra to configure when adding Toolkit to a project.
+Either way, Foundation is the sole owner of the Steam callback loop (`SteamAPI_Init`/`SteamAPI_RunCallbacks`) and all base types — the generated path just creates the same `SteamApi` node as a child instead of as the AutoLoad root itself, so it isn't something you need to see or configure directly in the AutoLoad list. Toolkit has no native singleton of its own and no init lifecycle to arbitrate — its C# `XxxDataExtensions`/`API.*` classes call straight into this same `SteamApi` singleton (wherever it lives in the tree), so there's nothing extra to configure when adding Toolkit to a project.
 
 -----
 
