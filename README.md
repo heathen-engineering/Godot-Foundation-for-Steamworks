@@ -98,7 +98,8 @@ In Godot, open **Project → Project Settings → Plugins** and enable **Foundat
 
 Open the **Steamworks** dock (bottom panel). Set your App ID, and add your Achievement API names, Stat API names, Leaderboard names, and DLC App IDs — whatever your game actually uses. This is stored in `res://steam_settings.json`, plain JSON so it stays readable/diffable/portable, not a Godot-only Resource.
 
-> ![Steamworks settings dock](docs/steamworks-dock.png)
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/d07f579c-0336-4b1e-87a5-e1ae124fc490" />
+
 
 ### 5. Click "Generate Code"
 
