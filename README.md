@@ -69,6 +69,10 @@ The native `SteamApi` GDExtension plays the role Steamworks.NET plays in the Uni
 - A registered [Steamworks developer account](https://partner.steamgames.com/)
 - **Steamworks SDK 1.63** — download from the Steamworks partner portal and place in `addons/FoundationSteamworks/include/sdk/`
 - A C++ build environment (GCC/Clang + CMake) **only if building from source**
+- [Godot-Game-Framework](https://github.com/heathen-engineering/Godot-Game-Framework), **enabled in the
+  consuming project** — a runtime dependency, not a build-time one. If it's missing, enabling this
+  plugin walks you through fetching it automatically via
+  [Extension Resolver for Godot](https://github.com/heathen-engineering/Godot-Extension-Resolver).
 
 > Pre-built binaries for **Windows, macOS, and Linux** (Debug and Release) are included — most developers never need to compile anything. Full source is included too, if you want to rebuild from scratch, audit the code, or modify it, using the provided `CMakeLists.txt`.
 
