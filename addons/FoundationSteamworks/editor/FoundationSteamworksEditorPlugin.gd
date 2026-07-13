@@ -1,8 +1,17 @@
 @tool
 extends EditorPlugin
 
-## Activates the Steamworks settings dock. Enable via Project Settings > Plugins
-## (this addon's plugin.cfg now points here).
+## Activates the Steamworks settings page — handed to the unified Project
+## Settings > Subsystems tab (Godot-Game-Framework) instead of building its
+## own bottom-panel dock. Enable via Project Settings > Plugins (this addon's
+## plugin.cfg now points here).
+##
+## Gated: FoundationSteamworks.gdextension (the native library everything
+## here ultimately depends on — SteamworksSubsystem, the Subsystem
+## integration) ships inert until heathen_gate confirms Godot-Game-Framework
+## is actually installed. See gate/heathen_gate.gd and
+## Godot-GameplayTags-Foundation's GameplayTagsEditorPlugin.gd (the
+## reference implementation this mirrors) for the full mechanism and why.
 ##
 ## Lives in Foundation, not Toolkit: Achievements/Stats/Leaderboards/App(DLC) —
 ## everything this dock and the generated SteamGame.gd cover — are fully
@@ -28,21 +37,56 @@ extends EditorPlugin
 ## dialog with a one-click "Generate Code" button appears, after which
 ## pressing Run again immediately succeeds.
 
-var _dock: SteamworksSettingsDock
+const HeathenGate = preload("res://addons/FoundationSteamworks/gate/heathen_gate.gd")
+
 var _export_plugin: SteamGameExportPlugin
 var _stale_dialog: AcceptDialog
 
 func _enter_tree() -> void:
-	_dock = SteamworksSettingsDock.new()
-	add_control_to_bottom_panel(_dock, "Steamworks")
+	if HeathenGate.ensure_unlocked(self, "FoundationSteamworks", _activate_tooling):
+		_activate_tooling()
+
+# NOT named _build() — EditorPlugin already declares a virtual _build() -> bool
+# (asks whether a custom pre-run build step should block "Run Project"); naming
+# this the same collides with it and breaks script parsing entirely.
+func _activate_tooling() -> void:
+	var bridge = Engine.get_singleton("SubsystemManagerBridge")
+	if bridge != null:
+		bridge.register_settings_panel("Steamworks", Callable(self, "_build_settings_panel"))
+		bridge.register_start_mode_setter("Steamworks", Callable(self, "_set_start_mode"))
+		bridge.register_build("Steamworks", Callable(self, "_build_status"), Callable(self, "_do_build"))
+
 	_export_plugin = SteamGameExportPlugin.new()
 	add_export_plugin(_export_plugin)
 
+func _build_settings_panel() -> Control:
+	return SteamworksSettingsDock.new()
+
+## Persists the project-wide Automatic/On Demand/Disabled choice —
+## SteamworksSubsystem::start_mode() and SteamApi::_ready() both read this
+## exact same ProjectSettings entry back, so the Subsystems tab's dropdown,
+## the framework's boot bookkeeping, and Steam's actual real init decision
+## can never disagree.
+func _set_start_mode(mode: int) -> void:
+	ProjectSettings.set_setting("steamworks/start_mode", mode)
+	ProjectSettings.set_initial_value("steamworks/start_mode", 2)
+	ProjectSettings.save()
+
+## The "Build" concept — SteamGame.gd (the type-safe generated wrapper) can
+## drift out of date with the Achievements/Stats/Leaderboards/DLC settings
+## edited in the settings panel. 0=Good/green (up to date), 1=NeedsAttention/
+## amber (stale). Mirrors _build()'s own staleness check below (that one
+## gates the Run button; this is the same check surfaced as a clickable
+## status button on the Subsystems tab row instead).
+func _build_status() -> int:
+	var settings := SteamSettingsIO.load_settings()
+	return 1 if SteamGameCodeGenerator.is_stale(settings) else 0
+
+func _do_build() -> void:
+	var generated_dir := SteamGameCodeGenerator.generate(SteamSettingsIO.load_settings())
+	SteamAutoloadSetup.ensure_autoload_setup(generated_dir.path_join(SteamGameCodeGenerator.LOADER_FILENAME))
+
 func _exit_tree() -> void:
-	if _dock != null:
-		remove_control_from_bottom_panel(_dock)
-		_dock.queue_free()
-		_dock = null
 	if _export_plugin != null:
 		remove_export_plugin(_export_plugin)
 		_export_plugin = null

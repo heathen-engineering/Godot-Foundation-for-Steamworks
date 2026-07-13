@@ -103,7 +103,6 @@ void SteamApi::ClientArtifactLoad()
             if (singleton->debug) UtilityFunctions::print("[SteamApi] Ready");
             singleton->IsReady = true;
             singleton->emit_signal("OnReady");
-            singleton->set_process(true);
         }
     }
     else
@@ -111,7 +110,6 @@ void SteamApi::ClientArtifactLoad()
         if (singleton->debug) UtilityFunctions::print("[SteamApi] Ready");
         singleton->IsReady = true;
         singleton->emit_signal("OnReady");
-        singleton->set_process(true);
     }
 }
 
@@ -1783,10 +1781,9 @@ void SteamApi::_ready()
     }
     else if (debug)
         UtilityFunctions::print("[SteamApi] AutoInitialise disabled; call InitialiseClient() or InitialiseServer() manually");
-    set_process(false);
 }
 
-void SteamApi::_process(double delta)
+void SteamApi::pump_callbacks(double delta)
 {
     if (!IsReady) return;
     if (is_client)
@@ -2170,7 +2167,6 @@ void SteamApi::OnLeaderboardFindResult(LeaderboardFindResult_t *pResult, bool bI
     {
         IsReady = true;
         emit_signal("OnReady");
-        set_process(true);
     }
 }
 

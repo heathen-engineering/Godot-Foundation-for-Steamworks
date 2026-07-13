@@ -14,7 +14,10 @@
 #include "SteamResult.h"
 #include "SteamTimedTrial.h"
 #include "StatData.h"
+#include "SteamworksSubsystem.h"
 #include "UserData.h"
+
+#include <gameframework/SubsystemManager.h>
 
 #include <godot_cpp/core/class_db.hpp>
 
@@ -53,6 +56,11 @@ void initialize_foundation_steam_module(ModuleInitializationLevel p_level)
     ClassDB::register_class<SteamResult>();
     ClassDB::register_class<SteamTimedTrial>();
     ClassDB::register_class<SteamLeaderboardDisplay>();
+
+    // Real gameframework::Subsystem registration — see Godot-Game-Framework's
+    // README, "The linking model", and FoundationGameplayTags' register_types.cpp
+    // for the reference implementation this mirrors.
+    gameframework::SubsystemManager::instance().register_subsystem<SteamworksSubsystem>();
 }
 
 void uninitialize_foundation_steam_module(ModuleInitializationLevel p_level)

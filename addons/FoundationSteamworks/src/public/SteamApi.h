@@ -373,7 +373,14 @@ public:
     void _enter_tree() override;
     void _exit_tree() override;
     void _ready() override;
-    void _process(double delta);
+
+    /// Steam's per-frame callback pump — was Node::_process(double), driven
+    /// by set_process(true)/false toggled around readiness. Now called
+    /// directly by SteamworksSubsystem::tick() (see SubsystemTicker in
+    /// Godot-Game-Framework) — one tick mechanism for the whole framework
+    /// instead of SteamApi self-ticking in parallel with everything else.
+    /// No-op if !IsReady, same guard the old _process() body had.
+    void pump_callbacks(double delta);
 
 protected:
     static void _bind_methods();
