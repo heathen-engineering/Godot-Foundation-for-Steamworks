@@ -100,8 +100,15 @@ jobs:
           mkdir -p package/addons/FoundationSteamworks
           cp -r addons/FoundationSteamworks/CSharp package/addons/FoundationSteamworks/
           cp -r addons/FoundationSteamworks/src package/addons/FoundationSteamworks/
+          cp -r addons/FoundationSteamworks/gate package/addons/FoundationSteamworks/
           cp addons/FoundationSteamworks/plugin.cfg package/addons/FoundationSteamworks/
-          cp addons/FoundationSteamworks/FoundationSteamworks.gdextension package/addons/FoundationSteamworks/
+          # Ships inert (.gdextension.available, not .gdextension) — Godot's boot-time
+          # scan never auto-loads it; gate/extension_resolver_gate.gd renames it to the
+          # real name once FoundationSteamworksEditorPlugin.gd confirms Godot-Game-Framework
+          # is present. (Previously copied the real, unlocked filename here, which doesn't
+          # exist in this repo at all — this step would have failed the first time it ran.)
+          cp addons/FoundationSteamworks/FoundationSteamworks.gdextension.available package/addons/FoundationSteamworks/
+          cp addons/FoundationSteamworks/extension.manifest.json package/addons/FoundationSteamworks/
           cp addons/FoundationSteamworks/FoundationAutoload.tscn package/addons/FoundationSteamworks/
           mkdir -p package/addons/FoundationSteamworks/bin
           cp artifacts/* package/addons/FoundationSteamworks/bin/

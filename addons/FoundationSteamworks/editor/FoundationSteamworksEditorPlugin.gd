@@ -8,8 +8,10 @@ extends EditorPlugin
 ##
 ## Gated: FoundationSteamworks.gdextension (the native library everything
 ## here ultimately depends on — SteamworksSubsystem, the Subsystem
-## integration) ships inert until heathen_gate confirms Godot-Game-Framework
-## is actually installed. See gate/heathen_gate.gd and
+## integration) ships inert until Extension Resolver confirms
+## Godot-Game-Framework is actually installed (at a satisfying version —
+## real version-guarding, not just presence, since the migration off
+## heathen_gate.gd). See gate/extension_resolver_gate.gd and
 ## Godot-GameplayTags-Foundation's GameplayTagsEditorPlugin.gd (the
 ## reference implementation this mirrors) for the full mechanism and why.
 ##
@@ -37,13 +39,13 @@ extends EditorPlugin
 ## dialog with a one-click "Generate Code" button appears, after which
 ## pressing Run again immediately succeeds.
 
-const HeathenGate = preload("res://addons/FoundationSteamworks/gate/heathen_gate.gd")
+const Gate = preload("res://addons/FoundationSteamworks/gate/extension_resolver_gate.gd")
 
 var _export_plugin: SteamGameExportPlugin
 var _stale_dialog: AcceptDialog
 
 func _enter_tree() -> void:
-	if HeathenGate.ensure_unlocked(self, "FoundationSteamworks", _activate_tooling):
+	if Gate.ensure_unlocked(self, "FoundationSteamworks", _activate_tooling):
 		_activate_tooling()
 
 # NOT named _build() — EditorPlugin already declares a virtual _build() -> bool
