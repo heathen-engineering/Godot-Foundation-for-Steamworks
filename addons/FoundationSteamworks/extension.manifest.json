@@ -2,7 +2,7 @@
     "schema_version": 1,
     "id": "FoundationSteamworks",
     "display_name": "Foundation for Steamworks",
-    "version": "1.63.2",
+    "version": "1.63.3",
     "repository_url": "https://github.com/heathen-engineering/Godot-Foundation-for-Steamworks",
     "source": {
         "type": "github_release",
