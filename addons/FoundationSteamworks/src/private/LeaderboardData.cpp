@@ -17,6 +17,9 @@ void LeaderboardData::_bind_methods()
     ClassDB::bind_method(D_METHOD("DownloadFriendsEntries", "start", "end", "detailCount", "callback"), &LeaderboardData::DownloadFriendsEntries);
     ClassDB::bind_method(D_METHOD("DownloadEntriesForUsers", "users", "detailCount", "callback"), &LeaderboardData::DownloadEntriesForUsers);
 
+    ClassDB::bind_method(D_METHOD("UploadScore", "score", "callback"), &LeaderboardData::UploadScore);
+    ClassDB::bind_method(D_METHOD("UploadScoreWithDetails", "score", "details", "callback"), &LeaderboardData::UploadScoreWithDetails);
+
     ClassDB::bind_method(D_METHOD("Equals", "other"), &LeaderboardData::Equals);
 
     ClassDB::bind_static_method("LeaderboardData", D_METHOD("Get", "leaderboardName"), &LeaderboardData::Get);
@@ -78,6 +81,18 @@ void LeaderboardData::DownloadEntriesForUsers(TypedArray<UserData> users, int de
 {
     if (SteamApi::GetIsReady())
         SteamApi::DownloadLeaderboardEntriesForUsers(users, detailCount, leaderboard_name, callback);
+}
+
+void LeaderboardData::UploadScore(int score, const Callable &callback) const
+{
+    if (SteamApi::GetIsReady())
+        SteamApi::UploadLeaderboardScore(leaderboard_name, score, callback);
+}
+
+void LeaderboardData::UploadScoreWithDetails(int score, const PackedInt32Array &details, const Callable &callback) const
+{
+    if (SteamApi::GetIsReady())
+        SteamApi::UploadLeaderboardScoreWithDetails(leaderboard_name, score, details, callback);
 }
 
 Ref<LeaderboardData> LeaderboardData::Get(const String &leaderboardName)

@@ -3,11 +3,19 @@ extends Control
 class_name SteamworksSettingsDock
 
 ## Bottom-panel dock editing Steamworks settings (App ID, achievements, stats,
-## leaderboards, DLC). The Godot analog of Unity's SteamToolsSettingsProvider
+## leaderboards). The Godot analog of Unity's SteamToolsSettingsProvider
 ## (Project Settings > Subsystems > Steamworks). Persisted at
 ## res://steam_settings.json via SteamSettingsIO — plain JSON, not a Resource
 ## (see SteamSettingsIO's doc comment for why), read/written directly the same
 ## way OghamManifestIO handles .ogham files.
+##
+## No DLC tab here (removed 2026-07-14): it was real UI with real persistence
+## but zero consumers anywhere in the codebase — DLC data comes live from
+## Steam (SteamApi::GetDLC(), populated from SteamApps()->GetDLCCount()) on
+## both engines, not from an authored settings list, matching Unity's own
+## DlcData (also live-populated, no settings-authored list). Nothing to
+## relocate to Toolkit either — Unity's actual DLC methods (IsDlcInstalled,
+## InstallDlc, GetDlcDownloadProgress) are Foundation-tier there too.
 ##
 ## Demo/playtest apps (main_app vs. demo_app/playtest_apps in the old
 ## SteamToolSettings Resource) still aren't exposed here — this dock only ever
@@ -24,7 +32,6 @@ var _app_id_spin: SpinBox
 var _achievements_list: ItemList
 var _stats_list: ItemList
 var _leaderboards_list: ItemList
-var _dlc_list: ItemList
 var _staleness_label: Label
 
 func _ready() -> void:
@@ -70,7 +77,6 @@ func _ready() -> void:
 
 	_achievements_list = _make_string_list_tab(tabs, "Achievements", _settings.get("achievements", []))
 	_stats_list = _make_string_list_tab(tabs, "Stats", _settings.get("stats", []))
-	_dlc_list = _make_string_list_tab(tabs, "DLC (App IDs)", _dlc_to_strings(_settings.get("dlc", [])))
 
 	var leaderboard_names: Array = []
 	for lb in _settings.get("leaderboards", []):
@@ -131,11 +137,6 @@ func _sync_list_to_settings(list: ItemList, tab_name: String) -> void:
 			_settings["achievements"] = values
 		"Stats":
 			_settings["stats"] = values
-		"DLC (App IDs)":
-			var ints: Array = []
-			for v in values:
-				ints.append(int(v))
-			_settings["dlc"] = ints
 		"Leaderboards":
 			var leaderboards: Array = []
 			for v in values:
@@ -143,12 +144,6 @@ func _sync_list_to_settings(list: ItemList, tab_name: String) -> void:
 			_settings["leaderboards"] = leaderboards
 
 	_save_settings()
-
-func _dlc_to_strings(dlc: Array) -> Array:
-	var result: Array = []
-	for d in dlc:
-		result.append(str(d))
-	return result
 
 func _on_app_id_changed(value: float) -> void:
 	_settings["app_id"] = int(value)

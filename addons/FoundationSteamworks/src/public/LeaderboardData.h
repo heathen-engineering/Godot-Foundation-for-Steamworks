@@ -29,6 +29,9 @@ public:
     void DownloadFriendsEntries(int start, int end, int detailCount, const Callable &callback) const;
     void DownloadEntriesForUsers(TypedArray<UserData> users, int detailCount, const Callable &callback) const;
 
+    void UploadScore(int score, const Callable &callback) const;
+    void UploadScoreWithDetails(int score, const PackedInt32Array &details, const Callable &callback) const;
+
     static Ref<LeaderboardData> Get(const String &leaderboardName);
     static Ref<LeaderboardData> FindOrCreate(const String &leaderboardName, bool lowestScoreIsTopRank, SteamLeaderboardDisplay::Type displayType);
 

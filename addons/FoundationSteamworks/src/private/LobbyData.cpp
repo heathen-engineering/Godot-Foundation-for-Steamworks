@@ -24,11 +24,17 @@ LobbyData::operator CSteamID() const
     return id;
 }
 
+// Hex of the 32-bit AccountID/FriendID component (CSteamID::GetAccountID()),
+// NOT the full 64-bit lobby SteamID — that's Id (GetIntId(), ConvertToUint64())
+// above. Same distinction as UserData::GetHexId().
 String LobbyData::ToHexId() const
 {
-    std::stringstream ss;
-    ss << std::hex << std::uppercase << id.GetAccountID();
-    return String(ss.str().c_str());
+    // See UserData::GetHexId()'s comment — std::stringstream here segfaults
+    // deep inside libstdc++'s codecvt machinery on this project's Mono/
+    // CoreCLR-flavored Godot editor build, reproduced even against the
+    // pre-existing, unmodified code. String::num_uint64's hex mode is the
+    // same output with zero iostream involvement.
+    return String::num_uint64(id.GetAccountID(), 16, true);
 }
 
 Ref<LobbyData> LobbyData::FromHex(String hexId)

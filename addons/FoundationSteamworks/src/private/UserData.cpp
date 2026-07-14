@@ -101,12 +101,22 @@ bool UserData::IsValid() const
            id.GetEUniverse() == k_EUniversePublic;
 }
 
+// Hex of the 32-bit AccountID/FriendID component (CSteamID::GetAccountID()),
+// NOT the full 64-bit SteamID — that's IntId (GetIntId(), ConvertToUint64())
+// below. Same account_id/hex distinction is mirrored in LobbyData::ToHexId().
 String UserData::GetHexId() const
 {
+    // Deliberately not std::stringstream — this GDExtension's statically
+    // linked libstdc++ iostream/locale globals are not guaranteed to agree
+    // with the hosting process's own (confirmed the hard way: this exact
+    // pattern segfaulted deep inside libstdc++'s codecvt machinery on a
+    // Mono/CoreCLR-flavored Godot editor build, reproduced even against the
+    // pre-existing, unmodified code — a std::stringstream construction is
+    // simply unsafe to rely on here). String::num_uint64's hex mode covers
+    // the same "uppercase hex, no 0x prefix" output with zero iostream
+    // involvement.
     uint32 account_id = id.GetAccountID();
-    std::stringstream ss;
-    ss << std::hex << std::uppercase << account_id;
-    return String(ss.str().c_str());
+    return String::num_uint64(account_id, 16, true);
 }
 
 void UserData::SetHexId(String hexId)
