@@ -1,9 +1,17 @@
 {
-    "schema_version": 1,
+    "schema_version": 2,
     "id": "FoundationSteamworks",
     "display_name": "Foundation for Steamworks",
     "version": "1.63.3",
     "repository_url": "https://github.com/heathen-engineering/Godot-Foundation-for-Steamworks",
+    "documentation_url": "https://heathen.group/kb/steam-welcome/",
+    "support_url": "https://github.com/heathen-engineering/Godot-Foundation-for-Steamworks/issues",
+    "license_url": "https://github.com/heathen-engineering/Godot-Foundation-for-Steamworks/blob/main/LICENSE",
+    "publisher": {
+        "name": "Heathen Engineering Limited",
+        "url": "https://heathen.group"
+    },
+    "description": "A 1:1 Steamworks SDK wrapper for Godot — User, Achievements, Stats, Leaderboards, and App/Utilities, plus a settings dock and a Generate Code button producing a type-safe SteamGame.gd wrapper.",
     "source": {
         "type": "github_release",
         "repo": "heathen-engineering/Godot-Foundation-for-Steamworks"
