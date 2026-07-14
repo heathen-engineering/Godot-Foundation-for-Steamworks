@@ -2,7 +2,7 @@
     "schema_version": 2,
     "id": "FoundationSteamworks",
     "display_name": "Foundation for Steamworks",
-    "version": "1.63.3",
+    "version": "1.63.4",
     "repository_url": "https://github.com/heathen-engineering/Godot-Foundation-for-Steamworks",
     "documentation_url": "https://heathen.group/kb/steam-welcome/",
     "support_url": "https://github.com/heathen-engineering/Godot-Foundation-for-Steamworks/issues",
