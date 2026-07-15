@@ -18,10 +18,10 @@ A GDExtension that wraps the Steamworks SDK for Godot 4, exposing Steam features
 
 ## Become a GitHub Sponsor
 
-[![Discord](https://img.shields.io/badge/Discord--1877F2?style=social&logo=discord)](https://discord.gg/6X3xrRc)
+[![Discord](https://img.shields.io/badge/Discord--1877F2?style=social&logo=discord)](https://discord.gg/xmtRNkW7hW)
 [![GitHub followers](https://img.shields.io/github/followers/heathen-engineering?style=social)](https://github.com/heathen-engineering?tab=followers)
 
-Support Heathen by becoming a [GitHub Sponsor](https://github.com/sponsors/heathen-engineering). Sponsorship directly funds development and maintenance of free tools like this, our game dev [Knowledge Base](https://heathen.group/), and our community on [Discord](https://discord.gg/6X3xrRc).
+Support Heathen by becoming a [GitHub Sponsor](https://github.com/sponsors/heathen-engineering). Sponsorship directly funds development and maintenance of free tools like this, our game dev [Knowledge Base](https://heathen.group/), and our community on [Discord](https://discord.gg/xmtRNkW7hW).
 
 Sponsors get access to our private SourceRepo, which includes **Toolkit for Steamworks** — a commercial extension that adds a high-level `SteamTools` singleton with auto-initialisation, leaderboard management, lobby helpers, inventory, avatar loading, and game server browsing.
 
