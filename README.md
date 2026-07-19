@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge)
 ![Maintained](https://img.shields.io/badge/Maintained%3F-yes-green?style=for-the-badge)
-![Godot](https://img.shields.io/badge/Godot-4.6%20%2B-478CBF?style=for-the-badge&logo=godotengine&logoColor=white)
+![Godot](https://img.shields.io/badge/Godot-4.6%20%2B-%23478CBF?style=for-the-badge&logo=godotengine&logoColor=white)
 
 A GDExtension that wraps the Steamworks SDK for Godot 4, exposing Steam features through a clean singleton API and strongly-typed data types. Fully functional as a standalone open-source addon. Forms the base layer for the commercial **Toolkit for Steamworks** extension.
 
@@ -10,7 +10,7 @@ A GDExtension that wraps the Steamworks SDK for Godot 4, exposing Steam features
 
 ## Also Available For
 
-[![Unity](https://img.shields.io/badge/Unity-6%20%2B-black?style=for-the-badge&logo=unity&logoColor=white)](https://github.com/heathen-engineering/Unity-Foundation-for-Steamworks)
+[![Unity](https://img.shields.io/badge/Unity-6%20%2B-%23313131?style=for-the-badge&logo=unity&logoColor=white)](https://github.com/heathen-engineering/Unity-Foundation-for-Steamworks)
 [![O3DE](https://img.shields.io/badge/O3DE-25.10%20%2B-%2300AEEF?style=for-the-badge)](https://github.com/heathen-engineering/O3DE-Foundation-for-Steamworks)
 
 -----
