@@ -1,9 +1,8 @@
 # Foundation for Steamworks
 
-![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)
-![Maintained](https://img.shields.io/badge/Maintained%3F-yes-green?style=flat-square)
-![Godot](https://img.shields.io/badge/Godot-4.6%20%2B-478CBF?style=flat-square&logo=godotengine&logoColor=white)
-![Steamworks](https://img.shields.io/badge/Steamworks_SDK-1.63-lightgrey?style=flat-square)
+![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge)
+![Maintained](https://img.shields.io/badge/Maintained%3F-yes-green?style=for-the-badge)
+![Godot](https://img.shields.io/badge/Godot-4.6%20%2B-478CBF?style=for-the-badge&logo=godotengine&logoColor=white)
 
 A GDExtension that wraps the Steamworks SDK for Godot 4, exposing Steam features through a clean singleton API and strongly-typed data types. Fully functional as a standalone open-source addon. Forms the base layer for the commercial **Toolkit for Steamworks** extension.
 
