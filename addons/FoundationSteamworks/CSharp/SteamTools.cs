@@ -176,7 +176,7 @@ namespace Heathen.SteamworksIntegration
                 LeaderboardEntryData entry = entryVar.Obj is GodotObject obj ? new LeaderboardEntryData(obj) : null;
                 callback?.Invoke(entry, ioError);
             });
-            Instance.Call("UploadLeaderboardScoreWithDetails", leaderboard, score, new PackedInt32Array(details), callable);
+            Instance.Call("UploadLeaderboardScoreWithDetails", leaderboard, score, details, callable);
         }
 
         private static List<LeaderboardEntryData> ExtractLeaderboardEntries(Variant entriesVar)

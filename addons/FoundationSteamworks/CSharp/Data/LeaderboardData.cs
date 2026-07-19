@@ -70,7 +70,7 @@ namespace Heathen.SteamworksIntegration
                 LeaderboardEntryData entry = entryVar.Obj is GodotObject obj ? new LeaderboardEntryData(obj) : null;
                 callback?.Invoke(entry, ioError);
             });
-            Engine.GetSingleton("SteamApi").Call("UploadLeaderboardScoreWithDetails", LeaderboardName, score, new PackedInt32Array(details), callable);
+            Engine.GetSingleton("SteamApi").Call("UploadLeaderboardScoreWithDetails", LeaderboardName, score, details, callable);
         }
 
         // --- Static ---

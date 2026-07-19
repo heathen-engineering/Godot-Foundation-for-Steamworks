@@ -11,6 +11,42 @@ permissions:
   contents: write
 
 jobs:
+  test-csharp:
+    name: C# bindings build (CSharp/)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Real GodotSharp compile of the addon's C# API surface, catching the
+      # class of bug a native-only CI never exercises: CSharp/ is packaged
+      # and shipped verbatim by the `package` job below without ever being
+      # built by anything. A real user hit exactly this (CS0246:
+      # PackedInt32Array, a type that only exists as a Variant.Type enum
+      # value in GodotSharp, not an instantiable C# type) because nothing
+      # here ever compiled it. Godot.NET.Sdk is the same MSBuild SDK the
+      # Godot editor itself uses to build C# projects, fetched from NuGet
+      # rather than requiring a full headless editor boot (which doesn't
+      # reliably trigger solution generation/build without a display).
+      - name: Build C# bindings
+        run: |
+          mkdir -p csharp-build-check
+          cp -r addons/FoundationSteamworks/CSharp csharp-build-check/
+          cat > csharp-build-check/FoundationSteamworksCSharpCheck.csproj <<'EOF'
+          <Project Sdk="Godot.NET.Sdk/4.6.1">
+            <PropertyGroup>
+              <TargetFramework>net8.0</TargetFramework>
+              <EnableDynamicLoading>true</EnableDynamicLoading>
+            </PropertyGroup>
+          </Project>
+          EOF
+          dotnet build csharp-build-check/FoundationSteamworksCSharpCheck.csproj
+
   build:
     strategy:
       fail-fast: false
@@ -100,6 +136,11 @@ jobs:
           cp -r addons/FoundationSteamworks/CSharp package/addons/FoundationSteamworks/
           cp -r addons/FoundationSteamworks/src package/addons/FoundationSteamworks/
           cp -r addons/FoundationSteamworks/gate package/addons/FoundationSteamworks/
+          # SDK itself is gitignored/fetched-in-CI (Valve license), but the
+          # placeholder doc telling consumers where to put it must ship —
+          # previously missing from the Asset Store package entirely.
+          mkdir -p package/addons/FoundationSteamworks/include
+          cp addons/FoundationSteamworks/include/SteamSDKGoesHere.md package/addons/FoundationSteamworks/include/
           cp addons/FoundationSteamworks/plugin.cfg package/addons/FoundationSteamworks/
           # Ships inert (.gdextension.available, not .gdextension) — Godot's boot-time
           # scan never auto-loads it; gate/extension_resolver_gate.gd renames it to the
