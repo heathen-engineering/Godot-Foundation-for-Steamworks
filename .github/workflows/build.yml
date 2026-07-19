@@ -136,6 +136,10 @@ jobs:
           cp -r addons/FoundationSteamworks/CSharp package/addons/FoundationSteamworks/
           cp -r addons/FoundationSteamworks/src package/addons/FoundationSteamworks/
           cp -r addons/FoundationSteamworks/gate package/addons/FoundationSteamworks/
+          # plugin.cfg's script= points into here (FoundationSteamworksEditorPlugin.gd)
+          # — previously never copied, so every packaged release shipped a plugin.cfg
+          # pointing at a script that didn't exist in the zip at all.
+          cp -r addons/FoundationSteamworks/editor package/addons/FoundationSteamworks/
           # SDK itself is gitignored/fetched-in-CI (Valve license), but the
           # placeholder doc telling consumers where to put it must ship —
           # previously missing from the Asset Store package entirely.
