@@ -25,6 +25,9 @@ For general questions, help, and troubleshooting, join our [Discord](https://dis
 
 ## Become a GitHub Sponsor
 
+**Prefer a one-time purchase?** Heathen's own storefront is live, direct source access at [heathen.group/pricing](https://heathen.group/pricing/), no sponsorship required.
+
+
 [![Discord](https://img.shields.io/badge/Discord--1877F2?style=social&logo=discord)](https://discord.gg/xmtRNkW7hW)
 [![GitHub followers](https://img.shields.io/github/followers/heathen-engineering?style=social)](https://github.com/heathen-engineering?tab=followers)
 
