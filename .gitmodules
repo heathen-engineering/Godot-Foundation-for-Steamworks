@@ -4,3 +4,6 @@
 [submodule "extern/Game-Framework"]
 	path = extern/Game-Framework
 	url = https://github.com/heathen-engineering/Game-Framework.git
+[submodule "On Codeberg"]
+	path = On Codeberg
+	url = https://codeberg.org/Heathen-Engineering/Godot-Foundation-for-Steamworks.git
