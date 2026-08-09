@@ -21,7 +21,7 @@ mono_crash.*.json
 addons/FoundationSteamworks/include/sdk/
 
 # CMake build directory
-addons/FoundationSteamworks/build/
+Archive/addons/FoundationSteamworks/build/
 
 # Compiled GDExtension binaries — never committed. CI builds and packages these;
 # for local dev, build from source (see README) or grab a Release zip.

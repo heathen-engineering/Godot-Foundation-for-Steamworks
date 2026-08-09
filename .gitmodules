@@ -1,8 +1,8 @@
 [submodule "godot-cpp"]
-	path = godot-cpp
+	path = Archive/godot-cpp
 	url = https://github.com/godotengine/godot-cpp.git
 [submodule "extern/Game-Framework"]
-	path = extern/Game-Framework
+	path = Archive/extern/Game-Framework
 	url = https://github.com/heathen-engineering/Game-Framework.git
 [submodule "On Codeberg"]
 	path = On Codeberg

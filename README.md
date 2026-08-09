@@ -84,7 +84,7 @@ The native `SteamApi` GDExtension plays the role Steamworks.NET plays in the Uni
 
 - **Godot 4.6** or compatible
 - A registered [Steamworks developer account](https://partner.steamgames.com/)
-- **Steamworks SDK 1.63**: download from the Steamworks partner portal and place in `addons/FoundationSteamworks/include/sdk/`
+- **Steamworks SDK 1.63**: download from the Steamworks partner portal and place in `Archive/addons/FoundationSteamworks/include/sdk/`
 - A C++ build environment (GCC/Clang + CMake) **only if building from source**
 - [Godot-Game-Framework](https://github.com/heathen-engineering/Godot-Game-Framework), **enabled in the
   consuming project**. This is a runtime dependency, not a build-time one. If it's missing, enabling this
@@ -99,7 +99,7 @@ The native `SteamApi` GDExtension plays the role Steamworks.NET plays in the Uni
 
 ### 1. Copy the addon
 
-Copy the `addons/FoundationSteamworks/` folder into your Godot project's `addons/` directory.
+Copy the `Archive/addons/FoundationSteamworks/` folder into your Godot project's `addons/` directory.
 
 ### 2. Add the Steamworks SDK
 
@@ -154,7 +154,7 @@ cmake -B build -DGODOT_CPP_PATH=/path/to/godot-cpp -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-The compiled library is written to `addons/FoundationSteamworks/bin/`.
+The compiled library is written to `Archive/addons/FoundationSteamworks/bin/`.
 
 The `CMakeLists.txt` exposes two cache variables you can override:
 
